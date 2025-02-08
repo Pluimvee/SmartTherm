@@ -1,0 +1,4 @@
+# Gitignore settings for SmartTerm
+secrets.yaml
+secrets.h
+/build
