@@ -2,3 +2,4 @@
 secrets.yaml
 secrets.h
 /build
+.gitignore
