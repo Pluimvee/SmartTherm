@@ -16,10 +16,12 @@ float longitude = 4.9041;
 
 extern Clock rtc;
 
-#define CALIBRATE_TROOM     (-1.3f)     // DS sensor calibration
-#define ERROR_RESETTER      (15*60*1000)// 15 minutes to retry a DataId and to reset the comm-err counter
-#define DS_SENSOR_EXTERNAL  0           // "\x28\xB4\x51\x0C\x00\x00\x00\x8F"
-#define DS_SENSOR_BOARD     1           // "\x28\xBF\x7A\x28\xA1\x22\x06\x51"
+#define CALIBRATE_TROOM     (-1.3f)         // DS sensor calibration
+#define ERROR_RESETTER      (15*60*1000)    // 15 minutes to retry a DataId and to reset the comm-err counter
+#define ANALYSE_TIME        (10*1000)       // once every 10 seconds we analyse the heating state
+#define ANTIPENDEL_TIMEFRAME (30*60*1000)   // no turning on/off within a 30 minutes timeframe
+#define DS_SENSOR_EXTERNAL  0               // "\x28\xB4\x51\x0C\x00\x00\x00\x8F"
+#define DS_SENSOR_BOARD     1               // "\x28\xBF\x7A\x28\xA1\x22\x06\x51"
 ////////////////////////////////////////////////////////////////////////////////////////////
 // 
 #define LOG_MESSAGE(req, resp)    DEBUG("[%s] - % 3.3d = T:%s, data %04.4X -> B:%s, data %0.4f", \
@@ -39,6 +41,7 @@ SmartControl::SmartControl()
 : OpenTherm(mInPin, mOutPin, false)               // opentherm shield
 , _wire(tempSensorPin), _dallas(&_wire)           // dalles inside temperature and print temperature
 , _auto_resetter(ERROR_RESETTER)                  // auto reset
+, _analyse_time(ANALYSE_TIME)
 , inside(  20.0f, 5,  10.0f, 40.0f, 0.02f, 3.0f)  // inside can only change slow
 , outside( 10.0f, 5, -15.0f, 35.0f, 0.02f, 3.0f)  // outside can only change slow
 , target(  21.0f, 0,  18.0f, 25.0f)               // does not expire, and no spike detection needed
@@ -53,7 +56,7 @@ SmartControl::SmartControl()
 
   communication_errors = 0;
   _sunrise.queryTime = 0;
-  operating_flags.enable_CH      = true;     // enable heating per default
+  operating_flags.enable_CH      = false;    // disable heating per default
   operating_flags.enable_DHW     = false;    // disable DHW heating
   operating_flags.enable_Cooling = true;     // enable cooling per default
   operating_flags.enable_OTC     = false;    // we are using OTC, the slave may not ;)
@@ -105,6 +108,7 @@ bool SmartControl::begin()
     );
 //    delay(1000);
   }
+  _timer_switch_onoff.set(ANTIPENDEL_TIMEFRAME);
   return true;
 }
 
@@ -310,6 +314,45 @@ void SmartControl::_handleResponse(unsigned long response, OpenThermResponseStat
 ////////////////////////////////////////////////////////////////////////////////////////////
 //
 ////////////////////////////////////////////////////////////////////////////////////////////
+bool SmartControl::analysis()
+{
+  if (!_analyse_time)
+    return true;
+
+  // detetmine the if heating should be turned OFF
+  if (operating_flags.enable_CH == true       // heating enabled
+      && _timer_switch_onoff.passed()         // last switching has been awhile back 
+      && setpoint.valid() && inlet.valid()
+      && inlet.get() > setpoint.get()         // and inlet (Tr) above setpoint
+    ) 
+  {
+    INFO("Switching off Heatpump, as Tset %0.2f reached below Tr %0.2f", setpoint.get(), inlet.get());
+    operating_flags.enable_CH = false;  // disable heating
+    _timer_switch_onoff.set(ANTIPENDEL_TIMEFRAME);
+  }
+
+  // detetmine the if heating should be turned ON
+  if (operating_flags.enable_CH == false    // when heating is off
+      && _timer_switch_onoff.passed()       // last switching has been awhile back 
+      && inside.valid() && target.valid() && setpoint.valid()
+      && ( 
+           (inside.get() < target.get())       // and room temperature is below target
+        || (inside.get() < (target.get() + 1.0f) && setpoint.trend() > 0)  // or room is near target and setpoint is rising
+      )
+    )
+  {  
+    INFO("Switching on Heatpump as setpoint is rising, inside is falling and reaching target");
+    operating_flags.enable_CH = true;  // enable heating
+    _timer_switch_onoff.set(ANTIPENDEL_TIMEFRAME);
+  }
+  INFO("Trend of Room temp is %d, Outside temp is %d, Setpoint is %d", inside.trend(), outside.trend(), setpoint.trend());
+
+  return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////
+//
+////////////////////////////////////////////////////////////////////////////////////////////
 bool SmartControl::loop() 
 {
   process();  // handle any response messages 
@@ -333,8 +376,7 @@ bool SmartControl::loop()
     else
       cmd++;
   }
-
-  return true;
+  return analysis();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////

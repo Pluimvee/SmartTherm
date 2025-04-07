@@ -11,7 +11,7 @@
 #define STOOKLIJN_W55       1.175f      // stooklijn W55
 #define STOOKLIJN_FACTOR    0.55f       // Default stooklijn factor
 #define INSIDE_FACTOR       0.45f       // inside delta to affect stooklijn
-#define CURVE_FACTOR        0.30f       // inside delta to affect stooklijn
+#define CURVE_FACTOR        0.35f       // inside delta to affect stooklijn
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -63,13 +63,13 @@ float HeatingCurve::calculate(Temperature *Tcurrent, Temperature *Ttarget, Tempe
   INFO("roomcur:%.2f, roomset:%.2f, outside:%.2f, deltaT-out:%.2f, deltaT-in:%.2f", current, target, outside, delta_outside, delta_inside);
 
   // first we calculate the factor (we use a double for precision)
-  double factor =  _factorB *delta_inside;  // use factor B for the delat inside
+  double factor =  _factorB *delta_inside;  // use factor B for the delta inside
   if (delta_outside <0)                     // do we need cooling?
     factor *=-1;                            // then reverse the outcome
   if (factor <0)                            // we only adjust to more heating/cooling needed. 
     factor = 0.0f;                          // Nature will do the rest
   factor += _factorA;                       // Add the retain temperature factor
-  if (factor > STOOKLIJN_W55)               // our top limit is the 55 degtees heating curve
+  if (factor > STOOKLIJN_W55)               // our top limit is the 55 degrees heating curve
     factor = STOOKLIJN_W55;
 
   // now we calculate the heating curve

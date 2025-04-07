@@ -22,7 +22,9 @@ private:
   uint16_t  _max_age;           // maximum age in minutes before N/A will be returned, and max time between entries in the statistics
   Timer     _age;               // age of last reading
   Periodic  _stat_interval;     // minimum interval between statistical entries
-  RunningAverage _statistics;   // 10 valid values which are added each 30 seconds (5 minutes of data)
+  Periodic  _longterm_stat_tmr;     // interval to update long term stat entries
+  mutable RunningAverage _statistics;     // 10 valid values which are added each 30 seconds (5 minutes of data)
+  mutable RunningAverage _longterm_stat;  // 10 average values added each 5 minutes (5 minutes of data)
 public:
   Temperature(float value=0.0f, uint16_t max_age=0, float min=0.0f, float max=0.0f, float max_diff_psec=0.0f, float k=0.0f); // 0 value to disable
   bool set(float value, bool validate=true);
@@ -30,6 +32,7 @@ public:
   bool valid() const;
   float average() const;
   const char *toString(uint8_t precision, bool celcius=true) const; // celcius=true for adding C
+  int trend() const; // negative for decline , 0 for stable, positive for incline
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,6 +95,8 @@ private:
   DallasTemperature  _dallas;
   SunRise            _sunrise;   // get sunrise and sunset times
   Periodic           _auto_resetter;
+  Timer              _timer_switch_onoff;
+  Periodic           _analyse_time;
 
   void _handleResponse(unsigned long response, OpenThermResponseStatus state);
 public:
@@ -104,6 +109,7 @@ public:
 
   bool begin();
   bool loop();
+  bool analysis();
   bool reset();
   float RoomCur();    // huidige kamer temperatuur
   float RoomSet();    // doel kamer temperatuur

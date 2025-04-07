@@ -11,7 +11,10 @@
 // °C
 ////////////////////////////////////////////////////////////////////////////////////////////
 Temperature::Temperature(float val, uint16_t max_age, float min, float max, float max_diff_psec, float k)
-: _statistics(STATISTICS_BUFFER_SIZE), _stat_interval(STATISTICS_BUFFER_TIMER)
+: _statistics(STATISTICS_BUFFER_SIZE)
+, _longterm_stat(STATISTICS_BUFFER_SIZE)
+, _stat_interval(STATISTICS_BUFFER_TIMER)
+, _longterm_stat_tmr(STATISTICS_BUFFER_TIMER * STATISTICS_BUFFER_SIZE)
 , _cur_val(val), _max_age(max_age)      // maximum age of a value
 , _min_val(min), _max_val(max)          // min and max absolute boundaries
 , _max_diff_psec(max_diff_psec), _k(k)  // max delta with previous measurements
@@ -53,6 +56,9 @@ bool Temperature::set(float value, bool validate)
   if (_stat_interval)           // Note: we do add spikes to update stddev !
     _statistics.add(value);
 
+  if (_longterm_stat_tmr)
+    _longterm_stat.add(_statistics.getFastAverage());
+
   if (!spike) {
     _cur_val = value;
     _age.set(_max_age * 60000); // flag as valid for max_age minutes
@@ -86,6 +92,22 @@ const char *Temperature::toString(uint8_t precision, bool celcius) const
   snprintf(_to_string, sizeof(_to_string), "%.*f%c", precision, _cur_val, celcius?'C':'\0'); // °C
 
   return _to_string;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////
+int Temperature::trend() const 
+{
+  if (_statistics.getCount() == 0 || _longterm_stat.getCount() == 0)
+    return 0; // no data available
+
+  float avg_long = _longterm_stat.getFastAverage();
+  float avg_last = _statistics.getFastAverage();
+
+  if (abs(avg_last - avg_long) < 0.1f)
+    return 0;
+  if (avg_last > avg_long)
+    return 1;
+  return -1;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////
