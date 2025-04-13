@@ -32,7 +32,7 @@ public:
   bool valid() const;
   float average() const;
   const char *toString(uint8_t precision, bool celcius=true) const; // celcius=true for adding C
-  int trend() const; // negative for decline , 0 for stable, positive for incline
+  float trend() const; // negative for decline , 0 for stable, positive for incline
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -109,7 +109,7 @@ public:
 
   bool begin();
   bool loop();
-  bool analysis();
+  bool set_operating_mode();
   bool reset();
   float RoomCur();    // huidige kamer temperatuur
   float RoomSet();    // doel kamer temperatuur

@@ -95,19 +95,18 @@ const char *Temperature::toString(uint8_t precision, bool celcius) const
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////
-int Temperature::trend() const 
+float Temperature::trend() const 
 {
   if (_statistics.getCount() == 0 || _longterm_stat.getCount() == 0)
-    return 0; // no data available
+    return 0; // not enough data available (takes 30 minutes to get at least one longterm stat)
 
   float avg_long = _longterm_stat.getFastAverage();
   float avg_last = _statistics.getFastAverage();
 
-  if (abs(avg_last - avg_long) < 0.1f)
-    return 0;
-  if (avg_last > avg_long)
-    return 1;
-  return -1;
+  if (abs(avg_last - avg_long) < 0.1f)  // filter noise
+    return 0;                 // 0 for steady
+  
+  return avg_last - avg_long; // <0.1 for falling, >0.1 for raising
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////

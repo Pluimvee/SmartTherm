@@ -52,20 +52,24 @@ float HeatingCurve::factorC(float newval) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 // returns setpoint
+// TODO: add cooling when outside is higher than inside
 float HeatingCurve::calculate(Temperature *Tcurrent, Temperature *Ttarget, Temperature *Toutside)
 {
   float current = Tcurrent->average();    // Diff
   float outside = Toutside->average();    // Diff
   float target  = Ttarget->average();     // to apply a smooth change 
 
-  double delta_outside  = target - outside;
-  double delta_inside   = target - current;
+  double delta_outside  = target - outside; // in summer this can be negative
+  double delta_inside   = target - current; // this can be negative due to cooking, fireplace, people, and sunshine !
   INFO("roomcur:%.2f, roomset:%.2f, outside:%.2f, deltaT-out:%.2f, deltaT-in:%.2f", current, target, outside, delta_outside, delta_inside);
 
   // first we calculate the factor (we use a double for precision)
   double factor =  _factorB *delta_inside;  // use factor B for the delta inside
   if (delta_outside <0)                     // do we need cooling?
     factor *=-1;                            // then reverse the outcome
+  
+  // TODO: think of helping nature a bit by not setting factor to 0 but divide by 5..10
+  //       inside factor will then become .09 or .045 (5 or 10)
   if (factor <0)                            // we only adjust to more heating/cooling needed. 
     factor = 0.0f;                          // Nature will do the rest
   factor += _factorA;                       // Add the retain temperature factor

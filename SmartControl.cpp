@@ -58,7 +58,7 @@ SmartControl::SmartControl()
   _sunrise.queryTime = 0;
   operating_flags.enable_CH      = false;    // disable heating per default
   operating_flags.enable_DHW     = false;    // disable DHW heating
-  operating_flags.enable_Cooling = true;     // enable cooling per default
+  operating_flags.enable_Cooling = false;    // disable cooling per default
   operating_flags.enable_OTC     = false;    // we are using OTC, the slave may not ;)
 }
 
@@ -162,7 +162,12 @@ float SmartControl::RoomSet() {
 float SmartControl::SetPoint()
 {
   setpoint.set(heating_curve.calculate(&inside, &target, &outside));
-  return setpoint.get();
+
+  if (operating_flags.enable_CH || operating_flags.enable_Cooling)
+    return setpoint.get();
+
+  // WeHeat bug: force OT TSet to 0 when CH is disabled
+  return 0;    
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -312,42 +317,99 @@ void SmartControl::_handleResponse(unsigned long response, OpenThermResponseStat
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////
-//
+/*  SWITCHING ON LOGIC
+                            ==================== trend of TSet / 30 min ===================
+    target	current	error 	-0,5  -0,4  -0,3	-0,2	-0,1	0  0,1   0,2   0,3   0,4   0,5
+    21	    22	     1.0											
+    21	    21,8	   0,8										                                          ON
+    21	    21,6	   0,6									                                      ON	  ON
+    21	    21,4	   0,4								                                  ON	  ON	  ON
+    21	    21,2	   0,2							                              ON	  ON	  ON	  ON
+    21	    21	     0.0					                            ON	  ON	  ON	  ON	  ON
+    21	    20,8	  -0,2						                      ON	ON	  ON	  ON	  ON	  ON
+    21	    20,6	  -0,4					                  ON	  ON	ON	  ON	  ON	  ON	  ON
+    21	    20,4	  -0,6				                ON  ON	  ON	ON	  ON	  ON	  ON  	ON
+    21	    20,2	  -0,8			            ON	  ON  ON	  ON	ON	  ON	  ON	  ON	  ON
+    21	    20	    -1.0	        	ON	  ON	  ON  ON	  ON	ON	  ON	  ON  	ON    ON
+                              ON		ON	  ON	  ON  ON	  ON	ON	  ON	  ON	  ON    ON
+    ==> ON = (2*trend > error)
+*/
 ////////////////////////////////////////////////////////////////////////////////////////////
-bool SmartControl::analysis()
+// use 1 decimal precision
+float round1(float value) {
+  return round(10.0f * value) / 10.0f;  // rounding to 1 decimal
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////
+bool SmartControl::set_operating_mode()
 {
   if (!_analyse_time)
-    return true;
+    return false; // no change in heating or cooling
 
-  // detetmine the if heating should be turned OFF
+  // TODO: add logic to handle invalid temps, like invalid outside, inlet or other boiler temp
+
+  // log some analysis
+  DEBUG("T/trend >>> TRoom= %0.1f/%0.1f, TOutside= %0.1f/%0.1f, TSet= %0.1f/%0.1f, Ta= %0.1f/%0.1f, Tret= %0.1f/%0.1f", 
+    inside.get(),   inside.trend(), 
+    outside.get(),  outside.trend(), 
+    setpoint.get(), setpoint.trend(), 
+    outlet.get(),   outlet.trend(), 
+    inlet.get(),    inlet.trend()
+  );
+
+  if (!_timer_switch_onoff.passed())       // last switching must been awhile back 
+    return false; // no change in heating or cooling
+
+  // detetmine if COOLING should be turned ON
+  if (operating_flags.enable_Cooling == false     // when cooling is off
+    && inside.valid()  && inside.get()  > 25.0f   // and inside is above 25 degrees
+    && outside.valid() && outside.get() > 25.0f   // and outside is above 25 degrees
+  ) {
+    INFO("Switch ON Cooling, as Tinside %0.2f and Toutside %0.2f are above 25 degrees", inside.get(), outside.get());
+    operating_flags.enable_Cooling = true;  // enable cooling
+    _timer_switch_onoff.set(ANTIPENDEL_TIMEFRAME);
+    return true;
+  }
+  // detetmine if COOLING should be turned OFF
+  if (operating_flags.enable_Cooling == true        // when cooling enabled
+      && inside.valid() && inside.get() < 25.0f     // and inside is below 25 degrees
+  ) {
+    INFO("Switch OFF Cooling, as Tinside %0.2f reached below 25 degrees", inside.get());
+    operating_flags.enable_Cooling = false;  // disable cooling
+    _timer_switch_onoff.set(ANTIPENDEL_TIMEFRAME);
+    return true;
+  }
+  // detetmine if HEATING should be turned ON
+  if (operating_flags.enable_CH == false          // when heating is off
+      && inside.valid() && inside.get() < 25.0f   // and inside is below 25 degrees
+      && target.valid() && setpoint.valid()
+  ) {
+    // error: positive when inside above target
+    float error = round1(inside.get() - target.get()); 
+    // trend: positive when setpoint is rising, which is when either inside or outside are declining (degrees/30 minutes)
+    float trend  = round1(setpoint.trend());
+    // meaning: when trend is high-incline we start heating early, even when error is still large positive
+    if (2*trend > error)
+    {  
+      INFO("Switch ON Heating, Tinside error (%0.1f) < 2x trend-TSet (%0.1f)", error, trend);
+      operating_flags.enable_CH = true;  // enable heating
+      _timer_switch_onoff.set(ANTIPENDEL_TIMEFRAME);
+      return true;
+    }
+    INFO("Switching mode scanned: inside error (%0.1f) is above 2x trend-TSet (%0.1f)", error, trend);
+  }
+  // detetmine if HEATING should be turned OFF
   if (operating_flags.enable_CH == true       // heating enabled
-      && _timer_switch_onoff.passed()         // last switching has been awhile back 
-      && setpoint.valid() && inlet.valid()
-      && inlet.get() > setpoint.get()         // and inlet (Tr) above setpoint
-    ) 
+    && setpoint.valid() && inlet.valid()
+    && round1(inlet.get() - setpoint.get()) > 0.1f  // when Tr = 0.2 above Tset
+  ) 
   {
     INFO("Switching off Heatpump, as Tset %0.2f reached below Tr %0.2f", setpoint.get(), inlet.get());
     operating_flags.enable_CH = false;  // disable heating
     _timer_switch_onoff.set(ANTIPENDEL_TIMEFRAME);
+    return true;
   }
-
-  // detetmine the if heating should be turned ON
-  if (operating_flags.enable_CH == false    // when heating is off
-      && _timer_switch_onoff.passed()       // last switching has been awhile back 
-      && inside.valid() && target.valid() && setpoint.valid()
-      && ( 
-           (inside.get() < target.get())       // and room temperature is below target
-        || (inside.get() < (target.get() + 1.0f) && setpoint.trend() > 0)  // or room is near target and setpoint is rising
-      )
-    )
-  {  
-    INFO("Switching on Heatpump as setpoint is rising, inside is falling and reaching target");
-    operating_flags.enable_CH = true;  // enable heating
-    _timer_switch_onoff.set(ANTIPENDEL_TIMEFRAME);
-  }
-  INFO("Trend of Room temp is %d, Outside temp is %d, Setpoint is %d", inside.trend(), outside.trend(), setpoint.trend());
-
-  return true;
+  return false; // no change in heating or cooling
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -376,7 +438,8 @@ bool SmartControl::loop()
     else
       cmd++;
   }
-  return analysis();
+  set_operating_mode();  // check if we need to switch on/off the heating or cooling
+  return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////
