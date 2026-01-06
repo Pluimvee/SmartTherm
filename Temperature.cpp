@@ -79,6 +79,7 @@ bool Temperature::valid() const {
 ////////////////////////////////////////////////////////////////////////////////////////////
 float Temperature::average() const 
 {
+  // instead of the average we may use the mean to filter out spikes / errors
   if (_statistics.getCount() > 0)
     return _statistics.getFastAverage();
   return _cur_val;    // is most likely the initial/default value
