@@ -17,7 +17,7 @@ DATED_VERSION(0, 9)
 #define CONSTRUCT_P1(var)       var(#var, HABaseDeviceType::PrecisionP1)
 #define CONSTRUCT_P2(var)       var(#var, HABaseDeviceType::PrecisionP2)
 
-#define CONFIGURE_TEMP(var)     var.setName(#var); var.setDeviceClass("temperature"); var.setIcon("mdi:thermometer");var.setUnitOfMeasurement("°C")
+#define CONFIGURE_TEMP(var)     var.setName(#var); var.setDeviceClass("temperature"); var.setStateClass("measurement"); var.setIcon("mdi:thermometer"); var.setUnitOfMeasurement("°C")
 #define CONFIGURE_INPUT(var)    var.setName(#var); var.setMin(0.0f);var.setMax(1.0f);var.setStep(0.05f); var.setMode(HANumber::ModeBox)
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,14 +58,14 @@ HAOTMonitor::HAOTMonitor()
   CONFIGURE_TEMP(outside);
   CONFIGURE_TEMP(inlet);
   CONFIGURE_TEMP(outlet);
-  modlvl.setName("Modulation Level"); modlvl.setUnitOfMeasurement("%"); modlvl.setDeviceClass("power_factor");
+  modlvl.setName("Modulation Level"); modlvl.setUnitOfMeasurement("%"); modlvl.setDeviceClass("power_factor"); modlvl.setStateClass("measurement");
 
   target.setName("target"); target.setIcon("mdi:thermometer"); target.setUnitOfMeasurement("°C");
   target.setMin(18.0f); target.setMax(25.0f); target.setStep(0.1f); target.setMode(HANumber::ModeBox);
   CONFIGURE_INPUT(factor_outside); 
   CONFIGURE_INPUT(factor_inside); 
   CONFIGURE_INPUT(factor_curve); 
-  factor.setName("factor"); factor.setDeviceClass("power");
+  factor.setName("factor"); factor.setDeviceClass("power"); factor.setStateClass("measurement");
 
   target.onCommand(settingsChanged);
   factor_outside.onCommand(settingsChanged);
@@ -246,4 +246,5 @@ bool HAOTMonitor::update()
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////
+
 

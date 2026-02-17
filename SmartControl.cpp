@@ -44,7 +44,7 @@ SmartControl::SmartControl()
 , _analyse_time(ANALYSE_TIME)
 , inside(  20.0f, 5,  10.0f, 40.0f, 0.02f, 3.0f)  // inside can only change slow
 , outside( 10.0f, 5, -15.0f, 40.0f, 0.02f, 3.0f)  // outside can only change slow
-, target(  21.0f, 0,  18.0f, 25.0f)               // does not expire, and no spike detection needed
+, target(  20.5f, 0,  18.0f, 25.0f)               // does not expire, and no spike detection needed
 , setpoint(20.0f, 5,  10.0f, 55.0f)               // no spike detection needed
 , inlet(   20.0f, 5,  10.0f, 55.0f, 1.0f, 3.0f)   // during defrosts the inlet can change fast
 , outlet(  20.0f, 5,  10.0f, 55.0f, 1.0f, 3.0f)   // during defrosts the outlet can change fast

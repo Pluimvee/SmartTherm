@@ -9,9 +9,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////
 #define STOOKLIJN_W35       0.5f        // stooklijn W35
 #define STOOKLIJN_W55       1.175f      // stooklijn W55
-#define STOOKLIJN_FACTOR    0.55f       // Default stooklijn factor
-#define INSIDE_FACTOR       0.45f       // inside delta to affect stooklijn
-#define CURVE_FACTOR        0.35f       // inside delta to affect stooklijn
+#define STOOKLIJN_FACTOR    0.65f       // Default stooklijn factor
+#define INSIDE_FACTOR       0.20f       // inside delta to affect stooklijn
+#define CURVE_FACTOR        0.00f       // inside delta to affect stooklijn
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 //
